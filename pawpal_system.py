@@ -99,7 +99,7 @@ class Scheduler:
         self.planned_task_order = plan
         return plan
 
-    def fetch_candidates(self) -> List[Task]:
+    def fetch_pending_tasks(self) -> List[Task]:
         return [t for t in self.owner.get_all_tasks() if t.status != "completed"]
 
     def score_task(self, task: Task) -> float:
