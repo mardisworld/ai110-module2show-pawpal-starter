@@ -82,7 +82,7 @@ classDiagram
 4. Four methods were added to the Scheduler dataclass. 
     a. Scheduler.fetch_pending_tasks() derives pending tasks using owner’s list.
     b. Scheduler.generate_daily_plan() sorts by pending status, priority, due date and fits items into available_hours_per_day
-    c. Scheduler.apply_constraints() and Scheduler.explain_plan() were updated with minimal logic to avoid no-op bottllneck. 
+    c. Scheduler.apply_constraints() and Scheduler.explain_plan() were updated with minimal logic to avoid "no-op bottleneck" (a place in code where a method exists but does nothing). 
 ---
 
 ## 2. Scheduling Logic and Tradeoffs
