@@ -74,8 +74,15 @@ classDiagram
 **b. Design changes**
 
 - Did your design change during implementation?
-- If yes, describe at least one change and why you made it.
+1. No changes on Task class attributes or methods. 
+2. No changes on Pet class attributes or methods. 
 
+- If yes, describe at least one change and why you made it.
+3. A float variable available_hours_per_day was added to the Owner dataclass. A method called Owner.get_all_tasks() was added to collects tasks from all owned pets.
+4. Four methods were added to the Scheduler dataclass. 
+    a. Scheduler.fetch_pending_tasks() derives pending tasks using owner’s list.
+    b. Scheduler.generate_daily_plan() sorts by pending status, priority, due date and fits items into available_hours_per_day
+    c. Scheduler.apply_constraints() and Scheduler.explain_plan() were updated with minimal logic to avoid no-op bottllneck. 
 ---
 
 ## 2. Scheduling Logic and Tradeoffs
