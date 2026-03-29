@@ -245,3 +245,168 @@ if __name__ == "__main__":
     # explain_plan gives the plain-text narrative version
     print("\nexplain_plan() output:")
     print(scheduler.explain_plan())
+
+    # ------------------------------------------------------------------
+    # SECTION 7 — Task sorting and filtering
+    # ------------------------------------------------------------------
+    section("7. Task sorting and filtering")
+
+    # Create tasks with different scheduled times (out of order)
+    task1 = Task(title="Early morning walk", category="exercise", duration_minutes=30, priority=5, scheduled_time="06:00")
+    task2 = Task(title="Afternoon play", category="exercise", duration_minutes=20, priority=4, scheduled_time="14:30")
+    task3 = Task(title="Evening feeding", category="feeding", duration_minutes=15, priority=3, scheduled_time="18:00")
+    task4 = Task(title="Late night grooming", category="grooming", duration_minutes=25, priority=2, scheduled_time="21:00")
+    task5 = Task(title="Midday check", category="health", duration_minutes=10, priority=4, scheduled_time="12:00")
+
+    # Add tasks to pets (out of order)
+    buddy.add_task(task4)  # Late night first
+    buddy.add_task(task2)  # Afternoon
+    buddy.add_task(task1)  # Early morning
+    buddy.add_task(task5)  # Midday
+    buddy.add_task(task3)  # Evening last
+
+    # Mark some tasks as completed for filtering demo
+    task1.mark_completed()
+    task3.status = "skipped"
+
+    print("\n  Original task order (as added):")
+    for i, task in enumerate(buddy.task_list, 1):
+        print(f"    {i}. {task.title} at {task.scheduled_time} - {task.status}")
+
+    # Sort tasks by time
+    sorted_tasks = Task.sort_by_time(buddy.task_list)
+    print("\n  Tasks sorted by time (using sort_by_time()):")
+    for i, task in enumerate(sorted_tasks, 1):
+        print(f"    {i}. {task.title} at {task.scheduled_time} - {task.status}")
+
+    # Filter by completion status
+    pending_tasks = Task.filter_tasks(buddy.task_list, completion_status="pending")
+    print(f"\n  Pending tasks only (filter_tasks with completion_status='pending'):")
+    for i, task in enumerate(pending_tasks, 1):
+        print(f"    {i}. {task.title} at {task.scheduled_time} - {task.status}")
+
+    completed_tasks = Task.filter_tasks(buddy.task_list, completion_status="completed")
+    print(f"\n  Completed tasks only (filter_tasks with completion_status='completed'):")
+    for i, task in enumerate(completed_tasks, 1):
+        print(f"    {i}. {task.title} at {task.scheduled_time} - {task.status}")
+
+    # Filter by pet name
+    buddy_tasks = Task.filter_tasks(owner.get_all_tasks(), pet_name="Buddy")
+    print(f"\n  Tasks for Buddy only (filter_tasks with pet_name='Buddy'):")
+    for i, task in enumerate(buddy_tasks, 1):
+        print(f"    {i}. {task.title} at {task.scheduled_time} - {task.status}")
+
+    # Combined filtering: pending tasks for Buddy
+    pending_buddy_tasks = Task.filter_tasks(buddy.task_list, completion_status="pending", pet_name="Buddy")
+    print(f"\n  Pending tasks for Buddy (combined filtering):")
+    for i, task in enumerate(pending_buddy_tasks, 1):
+        print(f"    {i}. {task.title} at {task.scheduled_time} - {task.status}")
+
+    # ------------------------------------------------------------------
+    # SECTION 8 — Repeatable tasks
+    # ------------------------------------------------------------------
+    section("8. Repeatable tasks")
+
+    # Create repeatable tasks
+    daily_feeding = Task(title="Daily feeding", category="feeding", duration_minutes=15, priority=4, frequency="daily")
+    weekly_bath = Task(title="Weekly bath", category="grooming", duration_minutes=45, priority=3, frequency="weekly")
+    one_time_vet = Task(title="Vet checkup", category="health", duration_minutes=60, priority=5)  # No frequency = one-time
+
+    # Add tasks to Luna (since Buddy already has many tasks)
+    luna = Pet(name="Luna", type="Cat", age=2)
+    owner.add_pet(luna)
+    luna.add_task(daily_feeding)
+    luna.add_task(weekly_bath)
+    luna.add_task(one_time_vet)
+
+    print("\n  Initial repeatable tasks for Luna:")
+    for task in luna.task_list:
+        print(f"    {task.to_display_string()}")
+
+    # Create scheduler for Luna's owner
+    luna_scheduler = Scheduler(owner=owner)
+
+    # Mark daily feeding as completed - should create new instance
+    print("\n  Marking 'Daily feeding' as completed...")
+    daily_feeding.mark_completed(scheduler=luna_scheduler)
+
+    print("  After marking daily feeding complete:")
+    for i, task in enumerate(luna.task_list, 1):
+        print(f"    {i}. {task.to_display_string()}")
+
+    # Mark weekly bath as completed - should create new instance
+    print("\n  Marking 'Weekly bath' as completed...")
+    weekly_bath.mark_completed(scheduler=luna_scheduler)
+
+    print("  After marking weekly bath complete:")
+    for i, task in enumerate(luna.task_list, 1):
+        print(f"    {i}. {task.to_display_string()}")
+
+    # Mark one-time vet checkup as completed - should NOT create new instance
+    print("\n  Marking 'Vet checkup' (one-time) as completed...")
+    one_time_vet.mark_completed(scheduler=luna_scheduler)
+
+    print("  After marking vet checkup complete:")
+    for i, task in enumerate(luna.task_list, 1):
+        print(f"    {i}. {task.to_display_string()}")
+
+    print(f"\n  Luna now has {len(luna.task_list)} total tasks (original 3 + 2 new recurring instances)")
+
+    # ------------------------------------------------------------------
+    # SECTION 9 — Conflict detection
+    # ------------------------------------------------------------------
+    section("9. Conflict detection")
+
+    #Create a new owner and pets for conflict testing
+    conflict_owner = Owner(name="Conflict Test", email="conflict@example.com", available_hours_per_day=1.0)  # Only 60 minutes
+    max_pet = Pet(name="Max", type="Dog", age=5)
+    bella_pet = Pet(name="Bella", type="Cat", age=3)
+    conflict_owner.add_pet(max_pet)
+    conflict_owner.add_pet(bella_pet)
+
+    # Create tasks with time slot conflicts (same scheduled_time)
+    max_walk_morning = Task(title="Morning walk", category="exercise", duration_minutes=30, priority=5, scheduled_time="08:00")
+    max_feed_morning = Task(title="Morning feeding", category="feeding", duration_minutes=15, priority=4, scheduled_time="08:00")  # Same time!
+    bella_groom = Task(title="Grooming", category="grooming", duration_minutes=45, priority=3, scheduled_time="10:00")
+    bella_play = Task(title="Playtime", category="exercise", duration_minutes=30, priority=4, scheduled_time="14:00")
+
+    max_pet.add_task(max_walk_morning)
+    max_pet.add_task(max_feed_morning)
+    bella_pet.add_task(bella_groom)
+    bella_pet.add_task(bella_play)
+
+    # Create scheduler and generate plan
+    conflict_scheduler = Scheduler(owner=conflict_owner)
+    conflict_plan = conflict_scheduler.generate_daily_plan()
+
+    print("\n  Generated schedule with potential conflicts:")
+    print(format_schedule(conflict_scheduler))
+
+    #Check for conflicts explicitly
+    conflicts = conflict_scheduler.detect_conflicts()
+    if conflicts:
+        print("\n  🚨 DETECTED CONFLICTS:")
+        for conflict in conflicts:
+            print(f"     {conflict}")
+    else:
+        print("\n  ✅ No conflicts detected")
+
+    # Test overload scenario - add more tasks to exceed time limit
+    print("\n  Adding more tasks to test overload detection...")
+    max_brush = Task(title="Teeth brushing", category="grooming", duration_minutes=20, priority=3)
+    bella_nap = Task(title="Nap time", category="health", duration_minutes=25, priority=2)
+    max_pet.add_task(max_brush)
+    bella_pet.add_task(bella_nap)
+
+    # Regenerate plan with overload
+    overload_plan = conflict_scheduler.generate_daily_plan()
+    print("\n  Schedule after adding overload tasks:")
+    print(format_schedule(conflict_scheduler))
+
+    overload_conflicts = conflict_scheduler.detect_conflicts()
+    if overload_conflicts:
+        print("\n  🚨 OVERLOAD CONFLICTS DETECTED:")
+        for conflict in overload_conflicts:
+            print(f"     {conflict}")
+    else:
+        print("\n  ✅ No overload conflicts detected")

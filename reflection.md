@@ -86,6 +86,10 @@ classDiagram
 ---
 
 ## 2. Scheduling Logic and Tradeoffs
+I asked Copilot to simplify a function create_next_task, and kept the result as it did seem simpler and easier to maintain. 
+![alt text](image-1.png)
+![alt text](image-2.png)
+![alt text](image-3.png)
 
 **a. Constraints and priorities**
 
@@ -104,11 +108,15 @@ classDiagram
 **a. How you used AI**
 
 - How did you use AI tools during this project (for example: design brainstorming, debugging, refactoring)?
+I used AI tools throughout the whole process, design brainstorming, debugging, writing code, and refactoring. 
 - What kinds of prompts or questions were most helpful?
+Specific prompts were most helpful. 
 
 **b. Judgment and verification**
 
 - Describe one moment where you did not accept an AI suggestion as-is.
+I got the following error multiple times and used AI to fix it. 
+![alt text](image-4.png)
 - How did you evaluate or verify what the AI suggested?
 
 ---
@@ -118,6 +126,7 @@ classDiagram
 **a. What you tested**
 
 - What behaviors did you test?
+
 - Why were these tests important?
 
 **b. Confidence**
@@ -132,11 +141,13 @@ classDiagram
 **a. What went well**
 
 - What part of this project are you most satisfied with?
+I am very happy with the functionality and design of the app, as well as its overall appearance. 
 
 **b. What you would improve**
 
 - If you had another iteration, what would you improve or redesign?
+I would implement the ability for more than one owner to exist. 
 
 **c. Key takeaway**
 
-- What is one important thing you learned about designing systems or working with AI on this project?
+- What is one important thing you learned about designing systems or working with AI on this project? To iterate, taking one step at a time. 

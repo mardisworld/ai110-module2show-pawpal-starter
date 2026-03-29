@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from datetime import date, datetime
+from dataclasses import dataclass, field, replace
+from datetime import date, datetime, timedelta
 from typing import Dict, List, Optional
 
 
@@ -15,14 +15,23 @@ class Task:
     priority: int          # 1 (lowest) .. 5 (highest)
     due_date: Optional[datetime] = None
     recurring: bool = False
+    frequency: Optional[str] = None  # None, "daily", or "weekly"
     status: str = "pending"   # "pending" | "completed" | "skipped"
+    scheduled_time: Optional[str] = None  # "HH:MM" format
+    pet: Optional[Pet] = None  # Reference to owning pet
 
     def __post_init__(self) -> None:
+        """Clamp priority to valid range (1-5)."""
         self.priority = max(1, min(5, self.priority))   # clamp to valid range
 
-    def mark_completed(self) -> None:
-        """Mark this task as done."""
+    def mark_completed(self, scheduler: Optional[Scheduler] = None) -> None:
+        """Mark this task as done. If repeatable, create and schedule the next instance."""
         self.status = "completed"
+        
+        # If this task is repeatable and we have a scheduler, create the next instance
+        if self.frequency in ("daily", "weekly") and scheduler and self.pet:
+            next_task = scheduler.create_next_task_occurrence(self)
+            self.pet.add_task(next_task)
 
     def reschedule(self, new_due_date: datetime) -> None:
         """Move the task's due date and reset it to pending so it re-enters the scheduler."""
@@ -33,12 +42,32 @@ class Task:
     def to_display_string(self) -> str:
         """Human-readable one-liner for display in UIs or reports."""
         due = f", due {self.due_date.strftime('%Y-%m-%d')}" if self.due_date else ""
+        time = f" at {self.scheduled_time}" if self.scheduled_time else ""
         recur = " (recurring)" if self.recurring else ""
+        freq = f" [{self.frequency}]" if self.frequency else ""
         return (
             f"{self.title} [{self.category}] "
             f"{self.duration_minutes}m | priority={self.priority} | "
-            f"status={self.status}{due}{recur}"
+            f"status={self.status}{due}{time}{recur}{freq}"
         )
+
+    @staticmethod
+    def sort_by_time(tasks: List[Task]) -> List[Task]:
+        """Sort tasks by scheduled_time using lambda function for 'HH:MM' format."""
+        return sorted(tasks, key=lambda t: t.scheduled_time or "23:59")
+
+    @staticmethod
+    def filter_tasks(tasks: List[Task], completion_status: Optional[str] = None, pet_name: Optional[str] = None) -> List[Task]:
+        """Filter tasks by completion status or pet name."""
+        filtered = tasks.copy()
+
+        if completion_status is not None:
+            filtered = [t for t in filtered if t.status == completion_status]
+
+        if pet_name is not None:
+            filtered = [t for t in filtered if t.pet and t.pet.name == pet_name]
+
+        return filtered
 
 
 @dataclass
@@ -54,6 +83,7 @@ class Pet:
 
     def add_task(self, task: Task) -> None:
         """Attach a new task to this pet."""
+        task.pet = self  # Set the pet reference
         self.task_list.append(task)
 
     def remove_task(self, task: Task) -> None:
@@ -109,18 +139,16 @@ class Scheduler:
     owner: Owner
     schedule_date: date = field(default_factory=date.today)
     planned_task_order: List[Task] = field(default_factory=list)
+    
+    # Frequency-to-days mapping for repeatable tasks
+    FREQUENCY_TO_DAYS = {"daily": 1, "weekly": 7}
 
     # ------------------------------------------------------------------
     # Core public interface
     # ------------------------------------------------------------------
 
     def generate_daily_plan(self) -> List[Task]:
-        """
-        Build an ordered list of tasks that fit within the owner's available time.
-
-        Tasks are ranked by score (see score_task), then greedily packed into the
-        available minutes.  The result is stored in planned_task_order.
-        """
+        """Build an ordered list of tasks that fit within the owner's available time."""
         candidates = self.fetch_pending_tasks()
         ranked = sorted(candidates, key=self.score_task, reverse=True)
 
@@ -140,16 +168,7 @@ class Scheduler:
         return [t for t in self.owner.get_all_tasks() if t.status == "pending"]
 
     def score_task(self, task: Task) -> float:
-        """
-        Compute a scheduling priority score for a task (higher = schedule sooner).
-
-        Base score: task.priority (1–5).
-        Urgency bonuses based on due_date relative to schedule_date:
-          • Overdue          → +5
-          • Due today        → +3
-          • Due within 3 days → +1
-          • No due date      →  0
-        """
+        """Compute a scheduling priority score for a task (higher = schedule sooner)."""
         score = float(task.priority)
 
         if task.due_date is not None:
@@ -170,14 +189,7 @@ class Scheduler:
         priorities: Optional[List[int]] = None,
         preferences: Optional[Dict[str, str]] = None,
     ) -> None:
-        """
-        Narrow the current plan by applying external constraints.
-
-        • time_available_hours: overrides the owner's available time and regenerates
-          the plan so the result actually reflects the new limit.
-        • priorities: if provided, keeps only tasks whose priority is in this list.
-        • preferences: merged into owner.preferences for future use.
-        """
+        """Narrow the current plan by applying external constraints."""
         self.owner.available_hours_per_day = time_available_hours
 
         if preferences:
@@ -217,13 +229,83 @@ class Scheduler:
 
         self.planned_task_order = plan
 
-    def explain_plan(self) -> str:
-        """
-        Produce a human-readable explanation of the daily plan.
+    def create_next_task_occurrence(self, completed_task: Task) -> Task:
+        """Create the next occurrence of a repeatable task (without adding to pet)."""
+        if not completed_task.frequency or not completed_task.pet:
+            raise ValueError("Cannot create next occurrence: task must have frequency and pet")
+        
+        if completed_task.frequency not in self.FREQUENCY_TO_DAYS:
+            raise ValueError(f"Unknown frequency: {completed_task.frequency}")
+        
+        days_delta = self.FREQUENCY_TO_DAYS[completed_task.frequency]
+        # Use the completed task's due_date as base, or datetime.now() if no due_date
+        base_date = completed_task.due_date if completed_task.due_date else datetime.now()
+        next_due = base_date + timedelta(days=days_delta)
+        next_due = next_due.replace(hour=0, minute=0, second=0, microsecond=0)
+        
+        return replace(completed_task, due_date=next_due, status="pending")
 
-        For each scheduled task, states why it was chosen (score, urgency).
-        Also reports tasks that were fetched but did not fit in the schedule.
-        """
+    def detect_conflicts(self) -> List[str]:
+        """Detect scheduling conflicts and return a list of warning messages."""
+        warnings = []
+        plan = self.planned_task_order
+        
+        if not plan:
+            return warnings
+        
+        # Check for tasks with same scheduled_time (time slot conflicts)
+        time_slots = {}
+        for task in plan:
+            if task.scheduled_time:
+                if task.scheduled_time in time_slots:
+                    # Same time slot conflict
+                    existing_task = time_slots[task.scheduled_time]
+                    warnings.append(
+                        f"⚠️ TIME CONFLICT: '{task.title}' and '{existing_task.title}' "
+                        f"both scheduled at {task.scheduled_time}"
+                    )
+                else:
+                    time_slots[task.scheduled_time] = task
+        
+        # Check for same-pet sequential conflicts (if tasks would exceed available time)
+        # Check both scheduled tasks and all pending tasks for the pet
+        all_pet_tasks = {}
+        for task in self.owner.get_all_tasks():
+            if task.pet and task.status == "pending":
+                pet_key = task.pet.name
+                if pet_key not in all_pet_tasks:
+                    all_pet_tasks[pet_key] = []
+                all_pet_tasks[pet_key].append(task)
+        
+        available_minutes = int(self.owner.available_hours_per_day * 60)
+        for pet_name, tasks in all_pet_tasks.items():
+            total_pet_time = sum(task.duration_minutes for task in tasks)
+            if total_pet_time > available_minutes:
+                warnings.append(
+                    f"⚠️ TIME OVERLOAD: {pet_name}'s pending tasks ({total_pet_time}m) exceed "
+                    f"available time ({available_minutes}m)"
+                )
+        
+        # Check for potential same-pet back-to-back conflicts
+        # (if a pet has multiple high-priority tasks that might be scheduled consecutively)
+        for pet_name, tasks in all_pet_tasks.items():
+            if len(tasks) > 1:
+                # Sort tasks by priority (highest first) to simulate scheduling order
+                sorted_tasks = sorted(tasks, key=lambda t: t.priority, reverse=True)
+                # If pet has more than 2 high-priority tasks, warn about potential overload
+                high_priority_count = sum(1 for t in sorted_tasks if t.priority >= 4)
+                if high_priority_count > 2:
+                    total_high_priority_time = sum(t.duration_minutes for t in sorted_tasks[:high_priority_count])
+                    if total_high_priority_time > available_minutes * 0.8:  # 80% of available time
+                        warnings.append(
+                            f"⚠️ PET OVERLOAD: {pet_name} has {high_priority_count} high-priority tasks "
+                            f"requiring {total_high_priority_time}m (close to time limit)"
+                        )
+        
+        return warnings
+
+    def explain_plan(self) -> str:
+        """Produce a human-readable explanation of the daily plan."""
         _THICK = "═" * 70
         _THIN  = "─" * 70
         _COL   = f"  {'TASK':<22} {'CATEGORY':<11} {'TIME':>4}  {'SCORE':>5}  REASON"
@@ -257,6 +339,14 @@ class Scheduler:
             f"  ·  {scheduled_minutes}m of {available_minutes}m  ·  {remaining_minutes}m unused",
             _THICK,
         ]
+
+        # Check for conflicts and add warnings
+        conflicts = self.detect_conflicts()
+        if conflicts:
+            lines.append("  ⚠️  SCHEDULING CONFLICTS DETECTED:")
+            for conflict in conflicts:
+                lines.append(f"     {conflict}")
+            lines.append(_THIN)
 
         if self.planned_task_order:
             lines += ["  SCHEDULED", _THIN, _COL, _THIN]
