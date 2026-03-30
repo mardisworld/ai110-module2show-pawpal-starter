@@ -189,7 +189,30 @@ if st.button("🎯 Generate Schedule", type="primary", help="Create your persona
         if plan:
             st.success(f"✅ Generated schedule with {len(plan)} tasks!")
             st.balloons()
+            
+            # Check for conflicts and display warnings
+            conflicts = st.session_state.scheduler.detect_conflicts()
+            if conflicts:
+                for conflict in conflicts:
+                    st.warning(conflict)
+            
+            # Display schedule in a professional table
             with st.expander("📋 View Detailed Schedule", expanded=True):
+                # Prepare data for table
+                schedule_data = []
+                for i, task in enumerate(plan, 1):
+                    priority_stars = "⭐" * task.priority
+                    schedule_data.append({
+                        "Order": i,
+                        "Task": task.title,
+                        "Category": task.category.title(),
+                        "Duration (min)": task.duration_minutes,
+                        "Priority": priority_stars,
+                        "Pet": task.pet.name if task.pet else "N/A"
+                    })
+                st.table(schedule_data)
+                
+                # Show explanation
                 st.code(st.session_state.scheduler.explain_plan())
         else:
             st.info("ℹ️ No tasks scheduled. Add some tasks first or check available time.")
@@ -201,10 +224,26 @@ if "scheduler" in st.session_state and st.session_state.scheduler and st.session
     st.write("**📅 Today's Schedule:**")
     total_time = sum(task.duration_minutes for task in st.session_state.scheduler.planned_task_order)
     st.info(f"Scheduled {len(st.session_state.scheduler.planned_task_order)} tasks totaling {total_time} minutes")
-
+    
+    # Check for conflicts and display warnings
+    conflicts = st.session_state.scheduler.detect_conflicts()
+    if conflicts:
+        for conflict in conflicts:
+            st.warning(conflict)
+    
+    # Display schedule in a professional table
+    schedule_data = []
     for i, task in enumerate(st.session_state.scheduler.planned_task_order, 1):
         priority_stars = "⭐" * task.priority
-        st.write(f"{i}. **{task.title}** - {task.duration_minutes}m ({task.category}) - {priority_stars}")
+        schedule_data.append({
+            "Order": i,
+            "Task": task.title,
+            "Category": task.category.title(),
+            "Duration (min)": task.duration_minutes,
+            "Priority": priority_stars,
+            "Pet": task.pet.name if task.pet else "N/A"
+        })
+    st.table(schedule_data)
 
     # Mark tasks as completed
     st.divider()
